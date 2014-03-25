@@ -25,10 +25,11 @@
     (when-let [paint (:paint obj)]
       (paint canv g obj))))
 
-(defn paint-ball [canv g obj]
-  (let [pos (:position obj)] 
+(defn paint-rect [canv g obj]
+  (let [pos (:position obj)
+        size (:size obj)] 
     (draw g 
-      (rect (x-coord pos) (y-coord pos) 10 10)
+      (rect (x-coord pos) (y-coord pos) (x-coord size) (y-coord size))
       (style :foreground :black))))
 
 (defn paint-fps-indicator [canv g last-frm-time-atom]
@@ -137,31 +138,47 @@
 
 ; run
 
+(defn update-world [world t-since-last-frm]
+  (let [collisions (detect-collisions world t-since-last-frm)]
+    (-> world 
+        (apply-collisions collisions)
+        (move-objs t-since-last-frm))))
+
 (let [running (atom true)
       world-atom (atom [{:id :ball
                          :position [100 100]
                          :size [10 10]
                          :velocity [0.1 -0.1] ; pixels/millisecond 
                          :solid? true
-                         :paint paint-ball
+                         :paint paint-rect
                          :move move-ball
                          :collide collide-ball}
                         {:id :top-wall
-                         :position [0 -1]
-                         :size [500 1]
+                         :position [50 50]
+                         :size [400 0]
+                         :paint paint-rect
                          :solid? true}
                         {:id :right-wall
-                         :position [500 0]
-                         :size [1 500]
+                         :position [450 50]
+                         :size [0 400]
+                         :paint paint-rect
                          :solid? true}
                         {:id :bottom-wall
-                         :position [0 500]
-                         :size [500 1]
+                         :position [50 450]
+                         :size [400 0]
+                         :paint paint-rect
                          :solid? true}
                         {:id :left-wall
-                         :position [-1 0]
-                         :size [1 500]
-                         :solid? true}])
+                         :position [50 50]
+                         :size [0 400]
+                         :paint paint-rect
+                         :solid? true}
+                        {:id :right-paddle
+                         :position [350 200]
+                         :size [10 70]
+                         :paint paint-rect
+                         :solid? true}
+                        ])
       last-frm-time-atom (atom (t/now))
       canv (canvas 
              :paint (fn [cnv g] 
@@ -177,17 +194,20 @@
             :content canv
             :on-close :dispose)]
   (listen frm :window-closing (fn [_] (reset! running false)))
+  (listen canv :key-pressed (fn [e]
+                              (swap! world-atom 
+                                     (fn [world] 
+                                       (let [idx-rtpdl (first (keep-indexed #(when (= :right-paddle (:id %2)) [%1 %2]) world))
+                                             idx (first idx-rtpdl)]
+                                         (assoc-in world [idx :position 1] (+ 5 (get-in idx-rtpdl [1 :position 1]))))))))
+  (.requestFocusInWindow canv)
   (-> frm show!)
   (while @running
     (let [frm-time (t/now)
           t-since-last-frm (t/in-millis
                              (t/interval @last-frm-time-atom frm-time))
-          world @world-atom
-          collisions (detect-collisions world t-since-last-frm)
-          new-world (-> world 
-                        (apply-collisions collisions)
-                        (move-objs t-since-last-frm))]
-      (reset! world-atom new-world)
+          world @world-atom]
+      (swap! world-atom update-world t-since-last-frm)
       (reset! last-frm-time-atom frm-time))
     (repaint! canv)
     (Thread/sleep 1)))
