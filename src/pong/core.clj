@@ -76,12 +76,15 @@
 
 (defn detect-obj-colls [idx-obj idx-others]
   (let [obj-bound (bounding-box (:obj idx-obj))] 
+    ;(println obj-bound)
     (for [idx-other idx-others
           collision? [horz-coll? vert-coll?]
           :let [other-bound (bounding-box (:obj idx-other))
                 collision (collision? obj-bound other-bound)]
           :when collision] 
-      {:idx-objs [idx-obj idx-other] :type collision})))
+      (do
+        ;(println collision)
+        {:idx-objs [idx-obj idx-other] :type collision}))))
 
 (defn index-solid [idx obj]
   (when (:solid? obj) 
@@ -93,6 +96,7 @@
     (loop [idx-obj (first indexed-solids)
            rest-idx-solids (rest indexed-solids)
            collisions []] 
+      ;(println idx-obj collisions)
       (if idx-obj
         (recur 
           (first rest-idx-solids)
@@ -101,23 +105,32 @@
                   (detect-obj-colls idx-obj rest-idx-solids)))
         collisions))))
 
-(defn collide-obj [idx-obj idx-other world]
+(defn collide-ball [obj other coll-type] 
+  (let [vel (:velocity obj)] 
+    (assoc obj :velocity (case coll-type
+                           :horz-coll [(x-coord vel) 
+                                       (* -1 (y-coord vel))]
+                           :vert-coll [(* -1 (x-coord vel))
+                                       (y-coord vel)]))))
+
+(defn collide-obj [idx-obj idx-other coll-type world]
   (let [idx (:idx idx-obj)
         obj (nth world idx)
         other (nth world (:idx idx-other))] 
     (assoc world
            idx 
            (if-let [collide (:collide obj)]
-             (collide obj other)
+             (collide obj other coll-type)
              obj))))  
 
 (defn apply-collision [world collision]
   (let [idx-objs (:idx-objs collision)
         frst (first idx-objs)
-        scnd (second idx-objs)]
+        scnd (second idx-objs)
+        coll-type (:type collision)]
     (->> world
-         (collide-obj frst scnd)
-         (collide-obj scnd frst))))
+         (collide-obj frst scnd coll-type)
+         (collide-obj scnd frst coll-type))))
 
 (defn apply-collisions [world collisions]
   (reduce apply-collision world collisions))
@@ -132,10 +145,21 @@
                          :solid? true
                          :paint paint-ball
                          :move move-ball
-                         :collide (fn [a b] (alert "asdf"))
-                         }
+                         :collide collide-ball}
                         {:id :top-wall
                          :position [0 -1]
+                         :size [500 1]
+                         :solid? true}
+                        {:id :right-wall
+                         :position [500 0]
+                         :size [1 500]
+                         :solid? true}
+                        {:id :bottom-wall
+                         :position [0 500]
+                         :size [500 1]
+                         :solid? true}
+                        {:id :left-wall
+                         :position [-1 0]
                          :size [1 500]
                          :solid? true}])
       last-frm-time-atom (atom (t/now))
@@ -166,4 +190,4 @@
       (reset! world-atom new-world)
       (reset! last-frm-time-atom frm-time))
     (repaint! canv)
-    (Thread/sleep 10)))
+    (Thread/sleep 1)))

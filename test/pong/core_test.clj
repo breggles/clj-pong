@@ -70,4 +70,33 @@
                                       :size [5 5]
                                       :velocity [0 0]
                                       :solid? true}]
-                              1)))))
+                              1))))
+  (testing "obj's collide is called when objects collide, if it exists"
+    (is (= ["called"
+            {:position [4 0] 
+             :size [5 5]
+             :velocity [0 0]
+             :solid? true}]
+           (collide-obj {:idx 0 
+                         :obj {:position [0 0] 
+                               :size [5 5]
+                               :velocity [0 0]
+                               :solid? true}}
+                         {:idx 1 
+                         :obj {:position [4 0] 
+                               :size [5 5]
+                               :velocity [0 0]
+                               :solid? true}}
+                        :vert-coll
+                        [{:position [0 0] 
+                               :size [5 5]
+                               :velocity [0 0]
+                               :solid? true
+                               :collide (fn [o oth ct] "called")}
+                         {:position [4 0] 
+                               :size [5 5]
+                               :velocity [0 0]
+                               :solid? true}]))))
+  (testing "apply-collision calls collide-obj twice"
+    (is (= 2 (with-redefs [collide-obj (fn [_ _ _ w] (inc w))] 
+               (apply-collision 0 {}))))))
