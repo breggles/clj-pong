@@ -18,6 +18,10 @@
                     (t/interval last-frm-time now))]
     (/ 1000 time-diff)))
 
+(defn get-by-id-indexed [world id]
+  (first 
+    (keep-indexed #(when (= :right-paddle (:id %2)) [%1 %2]) world)))
+
 ; paint
 
 (defn paint-world [canv g world]
@@ -57,7 +61,7 @@
   (map #(dec (+ %1 %2)) (:position obj) (:size obj)))
 
 (defn bounding-box [obj]
-  (vec (map int 
+  (vec (map #(Math/round (double %)) 
             (flatten [(:position obj) (bottom-right obj)]))))
 
 (defn horz-coll? [bnd-box1 bnd-box2]
@@ -195,13 +199,23 @@
             :on-close :dispose)]
   (listen frm :window-closing (fn [_] (reset! running false)))
   (listen canv :key-pressed (fn [e]
-                              (swap! world-atom 
-                                     (fn [world] 
-                                       (let [idx-rtpdl (first (keep-indexed #(when (= :right-paddle (:id %2)) [%1 %2]) world))
-                                             idx (first idx-rtpdl)]
-                                         (assoc-in world [idx :position 1] (+ 5 (get-in idx-rtpdl [1 :position 1]))))))))
+                              (let [keyChar (.getKeyChar e)] 
+                                (swap! world-atom 
+                                       (fn [world keyChar] 
+                                         (let [idx-rtpdl (get-by-id-indexed world :right-paddle)
+                                               idx (first idx-rtpdl)]
+                                           (assoc-in world 
+                                                     [idx :position 1]
+                                                     (+
+                                                      (case keyChar
+                                                        \k 5
+                                                        \i -5
+                                                        0) 
+                                                      (get-in idx-rtpdl [1 :position 1])))))
+                                       keyChar))))
   (.requestFocusInWindow canv)
   (-> frm show!)
+  (reset! last-frm-time-atom (t/now)) 
   (while @running
     (let [frm-time (t/now)
           t-since-last-frm (t/in-millis
