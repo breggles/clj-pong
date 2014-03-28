@@ -52,7 +52,7 @@
           []
           world))
 
-(defn move-ball [ball t-since-last-frm] 
+(defn move-obj [ball t-since-last-frm] 
   (let [distance (map (partial * t-since-last-frm) (:velocity ball))
         new-pos (vec (map + (:position ball) distance))]
     (assoc ball :position new-pos)))
@@ -101,7 +101,6 @@
     (loop [idx-obj (first indexed-solids)
            rest-idx-solids (rest indexed-solids)
            collisions []] 
-      ;(println idx-obj collisions)
       (if idx-obj
         (recur 
           (first rest-idx-solids)
@@ -148,14 +147,50 @@
         (apply-collisions collisions)
         (move-objs t-since-last-frm))))
 
-(let [running (atom true)
+(defn key-pressed [world keyChar] 
+  (let [idx-rtpdl (get-by-id-indexed world :right-paddle)
+        idx (first idx-rtpdl)]
+    (assoc-in world [idx :velocity 1] (case keyChar \k 0.1 \i -0.1 0))))
+
+(defn key-released [world keyChar] 
+  (let [idx-rtpdl (get-by-id-indexed world :right-paddle)
+        idx (first idx-rtpdl)]
+    (assoc-in world [idx :velocity 1] 0)))
+
+(defn key-listen [e world-atom handler]
+  (let [keyChar (.getKeyChar e)] 
+    (swap! world-atom handler keyChar)))
+
+(defn init-canvas [world-atom run?-atom] 
+  (let [canv (canvas 
+               :paint (fn [cnv g] 
+                        (paint-world cnv g @world-atom)
+                        ;(paint-fps-indicator cnv g last-frm-time-atom)
+                        )
+               :focusable? true)
+         frm (frame
+               :title "Pong"
+               :width 500
+               :height 500 
+               :resizable? false
+               :content canv
+               :on-close :dispose)]
+  (listen frm :window-closing (fn [_] (reset! run?-atom false)))
+  (listen canv :key-pressed (fn [e] (key-listen e world-atom key-pressed)))
+  (listen canv :key-released (fn [e] (key-listen e world-atom key-released)))
+  (.requestFocusInWindow canv)
+  (show! frm)
+  canv))
+
+(let [run?-atom (atom true)
+      last-frm-time-atom (atom (t/now))
       world-atom (atom [{:id :ball
                          :position [100 100]
                          :size [10 10]
                          :velocity [0.1 -0.1] ; pixels/millisecond 
                          :solid? true
                          :paint paint-rect
-                         :move move-ball
+                         :move move-obj
                          :collide collide-ball}
                         {:id :top-wall
                          :position [50 50]
@@ -180,43 +215,13 @@
                         {:id :right-paddle
                          :position [350 200]
                          :size [10 70]
+                         :velocity [0 0]
+                         :solid? true
                          :paint paint-rect
-                         :solid? true}
-                        ])
-      last-frm-time-atom (atom (t/now))
-      canv (canvas 
-             :paint (fn [cnv g] 
-                      (paint-world cnv g @world-atom)
-                      ;(paint-fps-indicator cnv g last-frm-time-atom)
-                      )
-             :focusable? true)
-      frm (frame
-            :title "Pong"
-            :width 500
-            :height 500 
-            :resizable? false
-            :content canv
-            :on-close :dispose)]
-  (listen frm :window-closing (fn [_] (reset! running false)))
-  (listen canv :key-pressed (fn [e]
-                              (let [keyChar (.getKeyChar e)] 
-                                (swap! world-atom 
-                                       (fn [world keyChar] 
-                                         (let [idx-rtpdl (get-by-id-indexed world :right-paddle)
-                                               idx (first idx-rtpdl)]
-                                           (assoc-in world 
-                                                     [idx :position 1]
-                                                     (+
-                                                      (case keyChar
-                                                        \k 5
-                                                        \i -5
-                                                        0) 
-                                                      (get-in idx-rtpdl [1 :position 1])))))
-                                       keyChar))))
-  (.requestFocusInWindow canv)
-  (-> frm show!)
+                         :move move-obj}])
+      canv (init-canvas world-atom run?-atom)]
   (reset! last-frm-time-atom (t/now)) 
-  (while @running
+  (while @run?-atom
     (let [frm-time (t/now)
           t-since-last-frm (t/in-millis
                              (t/interval @last-frm-time-atom frm-time))
