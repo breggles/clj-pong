@@ -42,11 +42,16 @@
 (defn paint-wall [canv g obj]
   (paint-rect canv g obj :red))
 
+(defn paint-score-board [canv g score-board]
+  (draw g
+        (string-shape 50 50 (str (:points-left score-board)))
+        (style :foreground :black)))
+
 (defn paint-fps-indicator [canv g last-frm-time-atom]
   (let [now (t/now)
         frm-rate (calc-frm-rate @last-frm-time-atom now)] 
     (draw g 
-      (string-shape 400 450 (str "FPS:" (int frm-rate)))
+      (string-shape 400 450 (str "FPS: " (int frm-rate)))
       (style :foreground :black))))
 
 ; move
@@ -125,6 +130,10 @@
                                        (* -1 (y-coord vel))]
                            :vert-coll [(* -1 (x-coord vel))
                                        (y-coord vel)]))))
+
+(defn collide-right-wall [wall other coll-type]
+  (if)
+  )
 
 (defn collide-obj [idx-obj idx-other coll-type world]
   (let [idx (:idx idx-obj)
@@ -207,10 +216,11 @@
 
 (defn init-world [world-atom canv]
   (let [canv-width (width canv)
-        canv-height (height canv)]
+        canv-height (height canv)
+        ball-width 10]
     [{:id :ball
       :position [100 100]
-      :size [10 10]
+      :size [10 ball-width]
       :velocity [0.1 -0.1] ; pixels/millisecond 
       :solid? true
       :paint paint-rect
@@ -222,10 +232,11 @@
       :paint paint-wall
       :solid? true}
      {:id :right-wall
-      :position [canv-width 0]
+      :position [(+ canv-width ball-width 2) 0]
       :size [0 canv-height]
       :paint paint-wall
-      :solid? true}
+      :solid? true
+      :collide collide-right-wall}
      {:id :bottom-wall
       :position [0 (- canv-height 2)]
       :size [canv-width 0]
@@ -233,7 +244,7 @@
       :solid? true}
      {:id :left-wall
       :position [0 0]
-      :size [0 canv-height]
+      :size [(- 0 ball-width 2) canv-height]
       :paint paint-wall
       :solid? true}
      {:id :right-paddle
@@ -251,7 +262,11 @@
       :solid? true
       :paint paint-rect
       :move move-obj
-      :collide collide-paddle}]))
+      :collide collide-paddle}
+     {:id :score-board
+      :points-left 0
+      :points-right 0
+      :paint paint-score-board}]))
 
 (let [run?-atom (atom true)
       last-frm-time-atom (atom (t/now))
